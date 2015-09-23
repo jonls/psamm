@@ -22,7 +22,7 @@ import logging
 from itertools import product
 
 from ..command import (Command, SolverCommandMixin, MetabolicMixin,
-                       ParallelTaskMixin)
+                       TableOutputMixin, ParallelTaskMixin)
 from ..util import MaybeRelative
 from .. import fluxanalysis
 
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 class FluxVariabilityCommand(MetabolicMixin, SolverCommandMixin,
-                             ParallelTaskMixin, Command):
+                             ParallelTaskMixin, TableOutputMixin, Command):
     """Run flux variablity analysis on the model."""
 
     @classmethod
@@ -110,7 +110,7 @@ class FluxVariabilityCommand(MetabolicMixin, SolverCommandMixin,
         for reaction_id, (lower, upper) in iter_results():
             rx = self._mm.get_reaction(reaction_id)
             rxt = rx.translated_compounds(lambda x: compound_name.get(x, x))
-            print('{}\t{}\t{}\t{}'.format(reaction_id, lower, upper, rxt))
+            yield reaction_id, lower, upper, rxt
 
         logger.info('Solving took {:.2f} seconds'.format(
             time.time() - start_time))

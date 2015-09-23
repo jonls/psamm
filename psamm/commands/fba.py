@@ -20,13 +20,15 @@ from __future__ import unicode_literals
 import time
 import logging
 
-from ..command import SolverCommandMixin, MetabolicMixin, Command
+from ..command import (SolverCommandMixin, MetabolicMixin, TableOutputMixin,
+                       Command)
 from .. import fluxanalysis
 
 logger = logging.getLogger(__name__)
 
 
-class FluxBalanceCommand(MetabolicMixin, SolverCommandMixin, Command):
+class FluxBalanceCommand(MetabolicMixin, SolverCommandMixin, TableOutputMixin,
+                         Command):
     """Run flux balance analysis on the model."""
 
     @classmethod
@@ -100,8 +102,7 @@ class FluxBalanceCommand(MetabolicMixin, SolverCommandMixin, Command):
                 rx_trans = rx.translated_compounds(
                     lambda x: compound_name.get(x, x))
                 genes = reaction_genes.get(reaction_id, '')
-                print('{}\t{}\t{}\t{}'.format(
-                    reaction_id, flux, rx_trans, genes))
+                yield reaction_id, flux, rx_trans, genes
 
             # Remember flux of requested reaction
             if reaction_id == reaction:

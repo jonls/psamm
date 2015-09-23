@@ -19,14 +19,14 @@ from __future__ import unicode_literals
 
 import logging
 
-from ..command import Command, FilePrefixAppendAction
+from ..command import Command, TableOutputMixin, FilePrefixAppendAction
 from ..formula import Formula
 from ..balancecheck import formula_balance
 
 logger = logging.getLogger(__name__)
 
 
-class FormulaBalanceCommand(Command):
+class FormulaBalanceCommand(TableOutputMixin, Command):
     """Check whether reactions in the model are elementally balanced.
 
     Balanced reactions are those reactions where the number of elements
@@ -65,9 +65,8 @@ class FormulaBalanceCommand(Command):
                 right_missing, left_missing = Formula.balance(
                     right_form, left_form)
 
-                print('{}\t{}\t{}\t{}\t{}'.format(
-                    reaction.id, left_form, right_form,
-                    left_missing, right_missing))
+                yield (reaction.id, left_form, right_form, left_missing,
+                       right_missing)
 
         logger.info('Unbalanced reactions: {}/{}'.format(unbalanced, count))
         logger.info('Unchecked reactions due to missing formula: {}/{}'.format(
