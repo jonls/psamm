@@ -25,10 +25,10 @@ import tempfile
 from contextlib import contextmanager
 import unittest
 
-from six import StringIO, BytesIO
+from six import StringIO, BytesIO, PY2
 
 from psamm.command import (main, Command, MetabolicMixin, SolverCommandMixin,
-                           CommandError)
+                           TableOutputMixin, CommandError)
 from psamm.lpsolver import generic
 from psamm.datasource.native import NativeModel
 
@@ -83,6 +83,16 @@ class MockSolverCommand(SolverCommandMixin, Command):
     """
     def run(self):
         solver = self._get_solver()
+
+
+class MockTableOutputCommand(TableOutputMixin, Command):
+    """Test table output command.
+
+    This is a command for testing table output commands.
+    """
+    def run(self):
+        for test in [('abc', 1), ('def', 2), ('\u2200\u2048', 3)]:
+            yield test
 
 
 class TestCommandMain(unittest.TestCase):
@@ -338,6 +348,14 @@ class TestCommandMain(unittest.TestCase):
         main(MockMetabolicCommand, args=[
             '--model', self._model_dir])
         self.assertTrue(MockMetabolicCommand.has_metabolic_model)
+
+    def test_table_output_command_main(self):
+        with redirected_stdout() as f:
+            main(MockTableOutputCommand, args=['--model', self._model_dir])
+            expect = '\r\n'.join(['abc\t1', 'def\t2', '\u2200\u2048\t3', ''])
+            if PY2:
+                expect = expect.encode('utf-8')
+            self.assertEqual(f.getvalue(), expect)
 
     def test_command_fail(self):
         mock_command = MockCommand(self._model, None)

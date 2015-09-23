@@ -32,11 +32,13 @@ import sys
 import argparse
 import logging
 import abc
+import functools
+import csv
 from itertools import islice
 import multiprocessing as mp
 
 import pkg_resources
-from six import add_metaclass, iteritems, itervalues, text_type
+from six import add_metaclass, iteritems, itervalues, text_type, PY2
 
 from . import __version__ as package_version
 from .datasource.native import NativeModel
@@ -142,6 +144,34 @@ class SolverCommandMixin(object):
         solver_args = dict(kwargs)
         solver_args.update(self._solver_args)
         return generic.Solver(**solver_args)
+
+
+class TableOutputMixin(object):
+    """Mixin for commands that output tables.
+
+    This wraps the ``run`` method such that any tuples yielded from it are
+    printed in TSV format.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(TableOutputMixin, self).__init__(*args, **kwargs)
+
+        # Wrap the run() method to output yielded entries
+        def wrap_run(run_func):
+            def wrapped():
+                self._write_tsv_table(run_func())
+            return wrapped
+
+        run_with_table_output = wrap_run(self.run)
+        functools.update_wrapper(run_with_table_output, self.run)
+        self.run = run_with_table_output
+
+    def _write_tsv_table(self, entries):
+        writer = csv.writer(sys.stdout, delimiter=str('\t'))
+        for entry in entries:
+            if PY2:
+                entry = [text_type(s).encode('utf-8') for s in entry]
+            writer.writerow(entry)
 
 
 class ParallelTaskMixin(object):
