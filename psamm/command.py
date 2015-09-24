@@ -34,11 +34,16 @@ import logging
 import abc
 import functools
 import csv
+import codecs
+import locale
+import subprocess
+from contextlib import contextmanager
 from itertools import islice
 import multiprocessing as mp
 
 import pkg_resources
 from six import add_metaclass, iteritems, itervalues, text_type, PY2
+from six.moves import zip
 
 from . import __version__ as package_version
 from .datasource.native import NativeModel
@@ -150,8 +155,18 @@ class TableOutputMixin(object):
     """Mixin for commands that output tables.
 
     This wraps the ``run`` method such that any tuples yielded from it are
-    printed in TSV format.
+    printed in tabular format according to the selected output format. Also
+    adds a ``--output-format`` parameter to the command that the user can
+    use to select the output format. The available output formats are
+    tab-separate values (``tsv``) and pretty-printed table (``pretty``).
     """
+
+    @classmethod
+    def init_parser(cls, parser):
+        parser.add_argument(
+            '--output-format', type=str, help='Format of output table',
+            choices=['tsv', 'pretty'], default='tsv')
+        super(TableOutputMixin, cls).init_parser(parser)
 
     def __init__(self, *args, **kwargs):
         super(TableOutputMixin, self).__init__(*args, **kwargs)
@@ -159,7 +174,10 @@ class TableOutputMixin(object):
         # Wrap the run() method to output yielded entries
         def wrap_run(run_func):
             def wrapped():
-                self._write_tsv_table(run_func())
+                if self._args.output_format == 'pretty':
+                    self._write_pretty_table(run_func())
+                else:
+                    self._write_tsv_table(run_func())
             return wrapped
 
         run_with_table_output = wrap_run(self.run)
@@ -172,6 +190,51 @@ class TableOutputMixin(object):
             if PY2:
                 entry = [text_type(s).encode('utf-8') for s in entry]
             writer.writerow(entry)
+
+    def _write_pretty_table(self, entries):
+        @contextmanager
+        def pager_stream():
+            if sys.stdout.isatty():
+                p = subprocess.Popen(['less', '-S'], stdin=subprocess.PIPE)
+                try:
+                    try:
+                        yield p.stdin
+                    finally:
+                        p.stdin.close()
+                finally:
+                    p.wait()
+            else:
+                yield sys.stdout
+
+        with pager_stream() as stream:
+            if not hasattr(stream, 'encoding') or stream.encoding is None:
+                writer = codecs.getwriter(locale.getpreferredencoding())
+                stream = writer(stream)
+
+            entry_list = []
+            columns = None
+            for entry in entries:
+                if columns is None:
+                    columns = [0 for _ in entry]
+                elif len(entry) != len(columns):
+                    raise ValueError('Entry has length {} expected {}'.format(
+                        len(entry), len(columns)))
+
+                entry = tuple(text_type(x) for x in entry)
+
+                for i in range(len(columns)):
+                    columns[i] = max(len(entry[i]), columns[i])
+
+                entry_list.append(entry)
+
+            stream.write(' '.join('-' * w for w in columns) + '\n')
+
+            if columns is not None:
+                for entry in entry_list:
+                    row = ' '.join(s.ljust(w) for s, w in zip(entry, columns))
+                    stream.write(row + '\n')
+
+            stream.write(' '.join('-' * w for w in columns) + '\n')
 
 
 class ParallelTaskMixin(object):
