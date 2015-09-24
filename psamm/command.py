@@ -165,7 +165,7 @@ class TableOutputMixin(object):
     def init_parser(cls, parser):
         parser.add_argument(
             '--output-format', type=str, help='Format of output table',
-            choices=['tsv', 'pretty'], default='tsv')
+            choices=['tsv', 'pretty', 'html'], default='tsv')
         super(TableOutputMixin, cls).init_parser(parser)
 
     def __init__(self, *args, **kwargs):
@@ -176,6 +176,8 @@ class TableOutputMixin(object):
             def wrapped():
                 if self._args.output_format == 'pretty':
                     self._write_pretty_table(run_func())
+                elif self._args.output_format == 'html':
+                    self._write_html_table(run_func())
                 else:
                     self._write_tsv_table(run_func())
             return wrapped
@@ -190,6 +192,23 @@ class TableOutputMixin(object):
             if PY2:
                 entry = [text_type(s).encode('utf-8') for s in entry]
             writer.writerow(entry)
+
+    def _write_html_table(self, entries):
+        stream = codecs.getwriter('utf-8')(sys.stdout)
+        import cgi
+        stream.write('<!doctype html>')
+        stream.write('<html><head>'
+                     '<meta charset="utf-8"/>'
+                     '<link rel="stylesheet"'
+                     ' href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5'
+                     '/css/bootstrap.min.css"/></head><body>')
+        stream.write('<table class="table table-striped">')
+        for entry in entries:
+            stream.write('<tr>')
+            for x in entry:
+                stream.write('<td>' + cgi.escape(text_type(x)) + '</td>')
+            stream.write('</tr>')
+        stream.write('</table></body></html>')
 
     def _write_pretty_table(self, entries):
         @contextmanager
