@@ -167,6 +167,16 @@ class Direction(enum.Enum):
         else:
             return '<=>'
 
+    @property
+    def fancy_symbol(self):
+        """Return fancy unicode symbol for direction."""
+        if self == Direction.Forward:
+            return '\u2192'
+        elif self == Direction.Reverse:
+            return '\u2190'
+        else:
+            return '\u21c4'
+
 
 @six.python_2_unicode_compatible
 class Reaction(object):
