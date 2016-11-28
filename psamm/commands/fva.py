@@ -34,7 +34,7 @@ class FluxVariabilityCommand(MetabolicMixin, SolverCommandMixin,
                              ParallelTaskMixin, Command):
     """Run flux variablity analysis on the model."""
 
-    _supported_loop_removal = ['none', 'tfba']
+    _supported_loop_removal = ['none', 'tfba', 'l1min']
 
     @classmethod
     def init_parser(cls, parser):
@@ -77,8 +77,17 @@ class FluxVariabilityCommand(MetabolicMixin, SolverCommandMixin,
         logger.info('Setting objective threshold to {}'.format(
             threshold))
 
+        l1_sum = None
+        if loop_removal == 'l1min':
+            p = fluxanalysis.FluxBalanceProblem(self._mm, solver)
+            p.prob.add_linear_constraints(
+                p.get_flux_var(reaction) >= float(threshold))
+            p.minimize_l1()
+            l1_sum = p.prob.result.get_value(p._z.sum(self._mm.reactions))
+            logger.info('L1 sum: {}'.format(l1_sum))
+
         handler_args = (
-            self._mm, solver, enable_tfba, float(threshold), reaction)
+            self._mm, solver, enable_tfba, float(threshold), l1_sum, reaction)
         executor = self._create_executor(
             FVATaskHandler, handler_args, cpus_per_worker=2)
 
@@ -111,13 +120,21 @@ class FluxVariabilityCommand(MetabolicMixin, SolverCommandMixin,
 
 
 class FVATaskHandler(object):
-    def __init__(self, model, solver, enable_tfba, threshold, reaction):
+    def __init__(self, model, solver, enable_tfba, threshold, l1_sum,
+                 reaction):
         self._problem = fluxanalysis.FluxBalanceProblem(model, solver)
         if enable_tfba:
             self._problem.add_thermodynamic()
 
         self._problem.prob.add_linear_constraints(
             self._problem.get_flux_var(reaction) >= threshold)
+
+        if l1_sum is not None:
+            if self._problem._z is None:
+                self._problem._add_minimization_vars()
+            z_sum = self._problem._z.sum(model.reactions)
+            self._problem.prob.add_linear_constraints(
+                z_sum == l1_sum)
 
     def handle_task(self, reaction_id, direction):
         return self._problem.flux_bound(reaction_id, direction)
