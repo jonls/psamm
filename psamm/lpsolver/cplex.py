@@ -457,7 +457,7 @@ class Result(BaseResult):
 
         return status == cp.solution.status.unbounded
 
-    def _get_value(self, var):
+    def _get_raw_value(self, var):
         """Return value of variable in solution."""
         return self._problem._cp.solution.get_values(
             self._problem._variables[var])
@@ -465,6 +465,11 @@ class Result(BaseResult):
     def _has_variable(self, var):
         """Whether variable exists in the solution."""
         return self._problem.has_variable(var)
+
+    def get_raw_value(self, expression):
+        """Return value of expression."""
+        self._check_valid()
+        return super(Result, self).get_raw_value(expression)
 
     def get_value(self, expression):
         """Return value of expression."""

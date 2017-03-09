@@ -829,45 +829,85 @@ class Result(object):
         """Whether solution is unbounded"""
 
     @abc.abstractmethod
+    def _get_raw_value(self, var):
+        """Return the raw solution value of a single variable.
+
+        Return float (most solvers) or Fraction (exact solvers).
+        """
+
     def _get_value(self, var):
-        """Return the solution value of a single variable."""
+        """Return the solution value of a single variable.
+
+        Return a value that is translated based on the variable type. For
+        normal (continuous) variables return float or Fraction. For integer
+        variables return the closest int and for binary variables return
+        the closest bool.
+        """
+        var_type = self._problem.get_variable_type(var)
+        value = self._get_raw_value(var)
+        if var_type == VariableType.Continuous:
+            return value
+
+        value = int(round(value))
+        if var_type == VariableType.Integer:
+            return value
+        elif var_type == VariableType.Binary:
+            return bool(value)
+
+        raise InvalidResultError('Invalid variable type')
 
     @abc.abstractmethod
     def _has_variable(self, var):
         """Return whether variable exists in the solution."""
 
-    def _evaluate_expression(self, expr):
-        """Evaluate an :class:`.Expression` using :meth:`_get_value`."""
-        def cast_value(v):
-            # Convert Decimal to Fraction to allow successful multiplication
-            # by either float (most solvers) or Fraction (exact solver).
-            # Multiplying Fraction and float results in a float, and
-            # multiplying Fraction and Fraction result in Fraction, which are
-            # exactly the types of results we want.
-            if isinstance(v, Decimal):
-                return Fraction(v)
-            return v
+    def _evaluate_expression(self, expr, get_value):
+        """Evaluate an :class:`.Expression` using the supplied function.
 
+        Use :meth:`_get_value` or :meth:`_get_raw_value` as the supplied
+        function.
+        """
         total = cast_value(expr.offset)
-        for var, value in expr.values():
-            value = cast_value(value)
+        for var, coef in expr.values():
+            coef = cast_value(coef)
             if not isinstance(var, Product):
-                total += self._get_value(var) * value
+                value = get_value(var)
+                if isinstance(value, bool) and coef == 1 and total == 0:
+                    total = value
+                else:
+                    total += get_value(var) * coef
             else:
                 total += reduce(
-                    operator.mul, (self._get_value(v) for v in var), value)
+                    operator.mul, (get_value(v) for v in var), coef)
         return total
 
-    def get_value(self, expression):
-        """Get value of variable or expression in result
+    def get_raw_value(self, expression):
+        """Get raw value of variable or expression in result.
 
         Expression can be an object defined as a name in the problem, in which
         case the corresponding value is simply returned. If expression is an
         actual :class:`.Expression` object, it will be evaluated using the
-        values from the result.
+        values from the result. A single variable will return either float or
+        Fraction depending on type of solver (non-exact or exact).
         """
         if isinstance(expression, Expression):
-            return self._evaluate_expression(expression)
+            return self._evaluate_expression(expression, self._get_raw_value)
+        elif not self._has_variable(expression):
+            raise ValueError('Unknown expression: {}'.format(expression))
+
+        return self._get_raw_value(expression)
+
+    def get_value(self, expression):
+        """Get value of variable or expression in result.
+
+        Expression can be an object defined as a name in the problem, in which
+        case the corresponding value is simply returned. If expression is an
+        actual :class:`.Expression` object, it will be evaluated using the
+        values from the result. A single variable return type will depend on
+        the type of variable (continuous, integer or binary) and on the type
+        of solver (non-exact or exact).
+        """
+        if isinstance(expression, Expression):
+            return self._evaluate_expression(expression, self._get_value)
         elif not self._has_variable(expression):
             raise ValueError('Unknown expression: {}'.format(expression))
 
