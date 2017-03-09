@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with PSAMM.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright 2014-2015  Jon Lund Steffensen <jon_steffensen@uri.edu>
+# Copyright 2014-2017  Jon Lund Steffensen <jon_steffensen@uri.edu>
 
 """Linear programming solver using Cplex."""
 
@@ -77,6 +77,12 @@ class Problem(BaseProblem):
         VariableType.Continuous: 'C',
         VariableType.Binary: 'B',
         VariableType.Integer: 'I'
+    }
+
+    VARTYPE_REVERSE_MAP = {
+        'C': VariableType.Continuous,
+        'B': VariableType.Binary,
+        'I': VariableType.Integer
     }
 
     CONSTR_SENSE_MAP = {
@@ -179,6 +185,11 @@ class Problem(BaseProblem):
     def has_variable(self, name):
         """Check whether variable is defined in the model."""
         return name in self._variables
+
+    def get_variable_type(self, name):
+        """Return variable type."""
+        return Problem.VARTYPE_REVERSE_MAP[
+            self._cp.variables.get_types(self._variables[name])]
 
     def _add_constraints(self, relation):
         """Add the given relation as one or more constraints

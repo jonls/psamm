@@ -662,6 +662,10 @@ class Problem(object):
     def has_variable(self, name):
         """Check whether a variable is defined in the problem."""
 
+    @abc.abstractmethod
+    def get_variable_type(self, name):
+        """Return type of variable name."""
+
     def namespace(self, names=None, **kwargs):
         """Return namespace for this problem.
 
