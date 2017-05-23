@@ -589,6 +589,34 @@ class NativeModel(object):
             database, model_definition, itervalues(self.exchange),
             itervalues(self.limits), v_max=self.default_flux_limit)
 
+    def infer_compartment_entries(self):
+        """Infer compartment entries for model based on reaction compounds.
+
+        Yield CompartmentEntry objects that can be used for a model where
+        compartment entries are not explicitly defined. The compartment entries
+        are inferred from the model reactions and only define an ID.
+
+        Returns:
+            Generator of :class:`CompartmentEntry`.
+        """
+        compartment_ids = set()
+        for reaction in self.reactions:
+            equation = reaction.equation
+            if equation is None:
+                continue
+
+            for compound, _ in equation.compounds:
+                compartment = compound.compartment
+                if compartment is None:
+                    compartment = self.default_compartment
+
+                if compartment is not None:
+                    compartment_ids.add(compartment)
+
+        for compartment in compartment_ids:
+            if compartment not in self.compartments:
+                yield CompartmentEntry(id=compartment)
+
     def __repr__(self):
         return str('<{} name={!r}>'.format(self.__class__.__name__, self.name))
 
